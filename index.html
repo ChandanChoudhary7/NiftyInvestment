@@ -1,108 +1,148 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nifty Investment Tracker</title>
-  <meta name="description" content="Real-time Nifty investment tracking with technical analysis and EMA crossover signals" />
-  <meta name="theme-color" content="#1F2121" />
-  
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty Investment Tracker - Enhanced</title>
+    <meta name="description" content="Advanced Nifty investment tracking with EMA crossovers and technical analysis">
+    <meta name="theme-color" content="#1F2121">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1>Nifty Investment Tracker</h1>
-      <button id="refreshBtn" class="btn btn-refresh" title="Refresh Data">↻ Refresh</button>
-      <div id="connectionStatus" class="status-indicator status-online">
-        <span style="width:8px; height:8px; border-radius:50%; background: var(--green)"></span>
-        Online
-      </div>
-    </header>
-    <main class="main">
-      <!-- Market Data -->
-      <section class="section">
-        <h2 class="section-title">Market Data</h2>
-        <div class="cards">
-          <div class="card">
-            <div class="card-label">Current Price</div>
-            <div id="currentPrice" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">Previous Close</div>
-            <div id="previousClose" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">Day Open</div>
-            <div id="dayOpen" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">All-Time High</div>
-            <div id="allTimeHigh" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">52 Week High</div>
-            <div id="week52High" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">52 Week Low</div>
-            <div id="week52Low" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">Correction % from ATH</div>
-            <div id="correction" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">Upside % to ATH</div>
-            <div id="upside" class="card-value positive">--</div>
-          </div>
-        </div>
-      </section>
-      
-      <!-- Technical Indicators -->
-      <section class="section">
-        <h2 class="section-title">Technical Indicators</h2>
-        <div class="cards">
-          <div class="card">
-            <div class="card-label">RSI (14)</div>
-            <div id="rsiValue" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">200 DMA</div>
-            <div id="dma200" class="card-value">--</div>
-          </div>
-          <div class="card">
-            <div class="card-label">Nifty PE Ratio</div>
-            <div id="peRatio" class="card-value">--</div>
-          </div>
-        </div>
-      </section>
-      
-      <!-- EMA Analysis -->
-      <section class="section">
-        <h2 class="section-title">📈 EMA Analysis</h2>
-        <div id="emaAnalysis" class="card">
-          <p>Loading EMA data...</p>
-        </div>
-      </section>
-      
-      <!-- Investment Signal -->
-      <section class="section">
-        <h2 class="section-title">🎯 Investment Signals</h2>
-        <div id="investmentSignal" class="signal-card">
-          <p>Loading signals...</p>
-        </div>
-      </section>
-      
-      <div id="loadingIndicator" class="loading-indicator hidden">Updating data...</div>
-    </main>
-    
-    <footer class="footer">
-      <div id="lastUpdated" class="last-updated">Last updated: --</div>
-    </footer>
-  </div>
+    <div class="container">
+        <header class="header">
+            <h1>Nifty Investment Tracker</h1>
+            <div class="header-actions">
+                <div id="connectionStatus" class="status-indicator status-online">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green)"></span>
+                    Online
+                </div>
+                <button id="refreshBtn" class="btn btn-refresh">↻ Refresh</button>
+            </div>
+        </header>
+        
+        <main class="main">
+            <!-- Market Data Section -->
+            <section class="section">
+                <h2 class="section-title">📊 Market Data</h2>
+                <div class="cards">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Current Price</div>
+                        </div>
+                        <div id="currentPrice" class="card-value">--</div>
+                        <div class="card-meta">NSE: NIFTY 50</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Previous Close</div>
+                        </div>
+                        <div id="previousClose" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Day Open</div>
+                        </div>
+                        <div id="dayOpen" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">All-Time High</div>
+                        </div>
+                        <div id="allTimeHigh" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">52 Week High</div>
+                        </div>
+                        <div id="week52High" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">52 Week Low</div>
+                        </div>
+                        <div id="week52Low" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Correction % from ATH</div>
+                        </div>
+                        <div id="correction" class="card-value">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Upside % to ATH</div>
+                        </div>
+                        <div id="upside" class="card-value positive">--</div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Technical Indicators Section -->
+            <section class="section">
+                <h2 class="section-title">⚡ Technical Indicators</h2>
+                <div class="cards">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">RSI (14)</div>
+                        </div>
+                        <div id="rsiValue" class="card-value">--</div>
+                        <div class="card-meta">Relative Strength Index</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">200 DMA</div>
+                        </div>
+                        <div id="dma200" class="card-value">--</div>
+                        <div class="card-meta">200 Day Moving Average</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-label">Nifty PE Ratio</div>
+                        </div>
+                        <div id="peRatio" class="card-value">--</div>
+                        <div class="card-meta">Price to Earnings</div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- EMA Analysis Section -->
+            <section class="section">
+                <h2 class="section-title">📈 EMA Analysis</h2>
+                <div class="card">
+                    <div id="emaAnalysis">
+                        <p>Loading EMA data...</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Investment Signal Section -->
+            <section class="section">
+                <h2 class="section-title">🎯 Investment Signals</h2>
+                <div id="investmentSignal" class="signal-card wait">
+                    <div class="signal-header">
+                        <div class="signal-status">LOADING</div>
+                        <div class="signal-description">Analyzing market conditions...</div>
+                    </div>
+                </div>
+            </section>
+            
+            <div id="loadingIndicator" class="loading-indicator hidden">Updating data...</div>
+        </main>
+        
+        <footer class="footer">
+            <div id="lastUpdated" class="last-updated">Last updated: --</div>
+            <div class="disclaimer">
+                <p>⚠️ This tool is for educational purposes only. Not financial advice. Please consult a financial advisor before making investment decisions.</p>
+            </div>
+        </footer>
+    </div>
 
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
