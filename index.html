@@ -36,21 +36,84 @@
             <!-- Investment Signal Card -->
             <div class="signal-card" id="signalCard">
                 <div class="signal-header">
-                    <h2>Investment Signal</h2>
-                    <div class="signal-badge" id="signalBadge">ANALYZING</div>
+                    <h2>Investment Signals</h2>
+                    <div class="signal-badge" id="combinedSignalBadge">ANALYZING</div>
                 </div>
-                <div class="signal-conditions" id="signalConditions">
-                    <div class="condition" id="correctionCondition">
-                        <span class="condition-text">10%+ Correction from ATH</span>
-                        <span class="condition-status">--</span>
+                
+                <!-- Value Strategy -->
+                <div class="strategy-section">
+                    <h3 class="strategy-title">📊 Value Strategy</h3>
+                    <div class="strategy-badge" id="valueStrategyBadge">ANALYZING</div>
+                    <div class="signal-conditions" id="valueSignalConditions">
+                        <div class="condition" id="correctionCondition">
+                            <span class="condition-text">10%+ Correction from ATH</span>
+                            <span class="condition-status">--</span>
+                        </div>
+                        <div class="condition" id="rsiCondition">
+                            <span class="condition-text">RSI Below 30</span>
+                            <span class="condition-status">--</span>
+                        </div>
+                        <div class="condition" id="peCondition">
+                            <span class="condition-text">PE Below 21</span>
+                            <span class="condition-status">--</span>
+                        </div>
                     </div>
-                    <div class="condition" id="rsiCondition">
-                        <span class="condition-text">RSI Below 30</span>
-                        <span class="condition-status">--</span>
+                </div>
+
+                <!-- EMA Strategy -->
+                <div class="strategy-section">
+                    <h3 class="strategy-title">⚡ Momentum Strategy</h3>
+                    <div class="strategy-badge" id="emaStrategyBadge">ANALYZING</div>
+                    <div class="signal-conditions" id="emaSignalConditions">
+                        <div class="condition" id="emaCrossCondition">
+                            <span class="condition-text">20 EMA above 50 EMA</span>
+                            <span class="condition-status">--</span>
+                        </div>
+                        <div class="condition" id="priceEmaCondition">
+                            <span class="condition-text">Price above both EMAs</span>
+                            <span class="condition-status">--</span>
+                        </div>
+                        <div class="condition" id="emaTrendCondition">
+                            <span class="condition-text">EMAs trending upward</span>
+                            <span class="condition-status">--</span>
+                        </div>
                     </div>
-                    <div class="condition" id="peCondition">
-                        <span class="condition-text">PE Below 21</span>
-                        <span class="condition-status">--</span>
+                </div>
+            </div>
+
+            <!-- EMA Analysis Card -->
+            <div class="card ema-analysis-card">
+                <div class="card-header">
+                    <h3>📈 EMA Analysis</h3>
+                    <div class="trend-indicator" id="emaTrendIndicator">--</div>
+                </div>
+                <div class="card-body">
+                    <div class="ema-values">
+                        <div class="ema-item">
+                            <div class="ema-label">20 EMA</div>
+                            <div class="ema-value" id="ema20Value">--</div>
+                            <div class="ema-trend" id="ema20Trend">--</div>
+                        </div>
+                        <div class="ema-item">
+                            <div class="ema-label">50 EMA</div>
+                            <div class="ema-value" id="ema50Value">--</div>
+                            <div class="ema-trend" id="ema50Trend">--</div>
+                        </div>
+                    </div>
+                    
+                    <div class="crossover-info">
+                        <div class="crossover-item">
+                            <span class="label">Last Crossover:</span>
+                            <span class="value" id="lastCrossover">--</span>
+                        </div>
+                        <div class="crossover-item">
+                            <span class="label">Crossover Type:</span>
+                            <span class="value" id="crossoverType">--</span>
+                        </div>
+                        <div class="crossover-item">
+                            <span class="label">Days Since Cross:</span>
+                            <span class="value" id="daysSinceCross">--</span>
+                        </div>
                     </div>
                 </div>
             </div>
