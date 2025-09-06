@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nifty Investment Tracker</title>
+    <meta name="description" content="Real-time Nifty investment tracking with technical analysis and buy signals">
+    <meta name="theme-color" content="#1F2121">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTmlmdHkgSW52ZXN0bWVudCBUcmFja2VyIiwic2hvcnRfbmFtZSI6Ik5pZnR5VHJhY2tlciIsImRlc2NyaXB0aW9uIjoiUmVhbC10aW1lIE5pZnR5IGludmVzdG1lbnQgdHJhY2tpbmcgd2l0aCB0ZWNobmljYWwgYW5hbHlzaXMiLCJzdGFydF91cmwiOiIuLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMxRjIxMjEiLCJ0aGVtZV9jb2xvciI6IiMxRjIxMjEiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M00zUnZjbWN2TWpBd01DOXpkbWNpSUhacFpYZENiM2c5SWpBZ01DQXlOQ0F5TkNJK1BISmxZM1FnZUQwaU1pSWdlVDBpTWlJZ2QybGtkR2c5SWpJd0lpQm9aV2xuYUhROUlqSXdJaUJtYVd4c1BTSWpNak14UWtNaUx6NDhkR1Y0ZENCNFBTSXhNaUlnZVQwaU1UUWlJR1pvYVd4c1BTSWpabVptSWlCbWIyNTBMV1poYldsc2VUMG9ZWEpwWVd3dElITmhibk1nYzJWeWFXWXBJaUJtYjI1MExYTnBlbVU5SWpFeElpQjBaWGgwTFdGdVkyaHZjajBpYldsa1pHeGxJajVPUEM5MFpYaDBQand2YzNablBnPT0iLCJzaXplcyI6IjI0eDI0IiwidHlwZSI6ImltYWdlL3N2Zyt4bWwifSx7InNyYyI6ImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNM1J2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0ExTVRJZ05URXlJajQ4Y21WamRDQjNhV1IwYUQwaU5URXlJaUJvWldsbmFIUTlJalV4TWlJZ1ptbHNiRDBpSXpJek1URkNReUl2UGp4MFpYaDBJSGc5SWpJMU5pSWdlVDBpTWpZd0lpQm1hV3hzUFNJalpsbW1JaUJtYjI1MExXWmhiV2xzZVQwb1lYSnBZV3dnTFNCellXNXpJSE5sY21sbUtTSWdabTl1ZEMxemFYcGxQU0kyTkNJZ2RHVjRkQzFoYm01amFHOXlQU0p0YVdSa2JHVWlQazVhUEM5MFpYaDBQand2YzNablBnPT0iLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53M3RvcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBmaWxsPSIjMjMxQkMiLz48dGV4dCB4PSIxMiIgeT0iMTQiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PShzYW5zLXNlcmlmKSIgZm9udC1zaXplPSIxMSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TjwvdGV4dD48L3N2Zz4=">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <span class="logo">📈</span>
+                    Nifty Tracker
+                </h1>
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span class="status-text" id="statusText">Loading...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Investment Signal Card -->
+            <div class="signal-card" id="signalCard">
+                <div class="signal-header">
+                    <h2>Investment Signal</h2>
+                    <div class="signal-badge" id="signalBadge">ANALYZING</div>
+                </div>
+                <div class="signal-conditions" id="signalConditions">
+                    <div class="condition" id="correctionCondition">
+                        <span class="condition-text">10%+ Correction from ATH</span>
+                        <span class="condition-status">--</span>
+                    </div>
+                    <div class="condition" id="rsiCondition">
+                        <span class="condition-text">RSI Below 30</span>
+                        <span class="condition-status">--</span>
+                    </div>
+                    <div class="condition" id="peCondition">
+                        <span class="condition-text">PE Below 21</span>
+                        <span class="condition-status">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Data Grid -->
+            <div class="data-grid">
+                <!-- Current Price Card -->
+                <div class="card price-card">
+                    <div class="card-header">
+                        <h3>Current Price</h3>
+                        <div class="price-change" id="priceChange">--</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="current-price" id="currentPrice">--</div>
+                        <div class="price-details">
+                            <div class="price-item">
+                                <span class="label">Previous Close:</span>
+                                <span class="value" id="previousClose">--</span>
+                            </div>
+                            <div class="price-item">
+                                <span class="label">Open:</span>
+                                <span class="value" id="openPrice">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Range Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Price Levels</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="level-item">
+                            <span class="label">All Time High:</span>
+                            <span class="value" id="allTimeHigh">--</span>
+                        </div>
+                        <div class="level-item">
+                            <span class="label">52W High:</span>
+                            <span class="value" id="high52w">--</span>
+                        </div>
+                        <div class="level-item">
+                            <span class="label">52W Low:</span>
+                            <span class="value" id="low52w">--</span>
+                        </div>
+                        <div class="level-item highlight">
+                            <span class="label">Correction from ATH:</span>
+                            <span class="value" id="correctionPercent">--</span>
+                        </div>
+                        <div class="level-item highlight">
+                            <span class="label">Upside to ATH:</span>
+                            <span class="value" id="upsidePercent">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical Indicators Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Technical Indicators</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="indicator-item">
+                            <span class="label">RSI (14):</span>
+                            <span class="value" id="rsiValue">--</span>
+                        </div>
+                        <div class="indicator-item">
+                            <span class="label">200 DMA:</span>
+                            <span class="value" id="dma200">--</span>
+                        </div>
+                        <div class="indicator-item">
+                            <span class="label">vs 200 DMA:</span>
+                            <span class="value" id="dmaPosition">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Valuation Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Valuation Metrics</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="valuation-item">
+                            <span class="label">Current PE:</span>
+                            <span class="value" id="peRatio">--</span>
+                        </div>
+                        <div class="pe-guidance">
+                            <div class="guidance-item">
+                                <span class="dot attractive"></span>
+                                <span>Attractive: Below 21</span>
+                            </div>
+                            <div class="guidance-item">
+                                <span class="dot expensive"></span>
+                                <span>Expensive: Above 25</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Last Updated -->
+            <div class="last-updated">
+                <span id="lastUpdated">Last updated: --</span>
+                <button class="refresh-btn" id="refreshBtn" title="Refresh data">
+                    <span class="refresh-icon">↻</span>
+                </button>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <p>Fetching market data...</p>
+        </div>
+
+        <!-- Offline Banner -->
+        <div class="offline-banner" id="offlineBanner">
+            <span>You're offline. Showing cached data.</span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
