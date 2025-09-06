@@ -1,20 +1,28 @@
-// Nifty Investment Tracker PWA - JavaScript
-class NiftyTracker {
+// Enhanced Nifty Investment Tracker with EMA Crossover Analysis
+class NiftyEMATracker {
     constructor() {
         this.data = null;
+        this.historicalData = [];
+        this.emaData = {
+            ema20: [],
+            ema50: [],
+            crossovers: []
+        };
         this.isOnline = navigator.onLine;
         this.refreshInterval = null;
         this.API_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
         this.SYMBOL = '^NSEI';
         
-        // Thresholds
+        // Calculation constants
         this.THRESHOLDS = {
             RSI_OVERSOLD: 30,
             RSI_OVERBOUGHT: 70,
             PE_ATTRACTIVE: 21,
             PE_EXPENSIVE: 25,
             CORRECTION_THRESHOLD: 10,
-            ALL_TIME_HIGH: 26277.35
+            ALL_TIME_HIGH: 26277.35,
+            EMA_PERIOD_20: 20,
+            EMA_PERIOD_50: 50
         };
 
         // Market hours (IST)
@@ -23,7 +31,7 @@ class NiftyTracker {
             end: { hour: 15, minute: 30 }
         };
 
-        // Fallback data
+        // Enhanced fallback data with historical prices
         this.FALLBACK_DATA = {
             current_price: 24741.00,
             previous_close: 24734.30,
@@ -33,10 +41,47 @@ class NiftyTracker {
             all_time_high: 26277.35,
             pe_ratio: 21.73,
             rsi: 53.21,
-            dma_200: 24631
+            dma_200: 24631,
+            ema_20: 24750.25,
+            ema_50: 24680.15,
+            ema_trend: 'BULLISH',
+            last_crossover: '2024-08-15',
+            crossover_type: 'BULLISH_CROSS',
+            days_since_cross: 22
         };
 
+        // Sample historical data for EMA calculation
+        this.FALLBACK_HISTORICAL = this.generateFallbackHistoricalData();
+
         this.init();
+    }
+
+    generateFallbackHistoricalData() {
+        const data = [];
+        const basePrice = 24000;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 100);
+
+        for (let i = 0; i < 100; i++) {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + i);
+            
+            // Generate realistic price movement
+            const randomFactor = (Math.random() - 0.5) * 0.03; // ±3% daily movement
+            const trendFactor = i < 50 ? -0.001 : 0.002; // Bear then bull trend
+            const price = basePrice * (1 + (randomFactor + trendFactor) * i / 10);
+            
+            data.push({
+                date: date.toISOString().split('T')[0],
+                close: Math.round(price * 100) / 100,
+                high: Math.round(price * 1.02 * 100) / 100,
+                low: Math.round(price * 0.98 * 100) / 100,
+                open: Math.round(price * (1 + (Math.random() - 0.5) * 0.01) * 100) / 100,
+                volume: Math.floor(Math.random() * 1000000) + 500000
+            });
+        }
+        
+        return data;
     }
 
     async init() {
@@ -44,34 +89,36 @@ class NiftyTracker {
         this.registerServiceWorker();
         this.checkOnlineStatus();
         
-        // Show loading initially
         this.showLoading();
-        
-        // Load cached data first if available
         this.loadCachedData();
         
-        // Fetch fresh data
-        await this.fetchNiftyData();
+        // Fetch fresh data and historical data
+        await Promise.all([
+            this.fetchNiftyData(),
+            this.fetchHistoricalData()
+        ]);
         
-        // Setup auto-refresh if in market hours
+        this.calculateEMAs();
+        this.detectCrossovers();
+        this.updateUI();
         this.setupAutoRefresh();
         
         this.hideLoading();
     }
 
     setupEventListeners() {
-        // Refresh button
         const refreshBtn = document.getElementById('refreshBtn');
-        refreshBtn.addEventListener('click', () => this.manualRefresh());
+        refreshBtn?.addEventListener('click', () => this.manualRefresh());
 
-        // Online/offline events
         window.addEventListener('online', () => this.handleOnlineStatus(true));
         window.addEventListener('offline', () => this.handleOnlineStatus(false));
 
-        // Page visibility change
+        // Visibility change for auto-refresh management
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                this.fetchNiftyData();
+            if (document.visibilityState === 'visible') {
+                this.setupAutoRefresh();
+            } else {
+                this.clearAutoRefresh();
             }
         });
     }
@@ -79,88 +126,598 @@ class NiftyTracker {
     async registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             try {
-                // Create service worker inline
-                const swCode = `
-                const CACHE_NAME = 'nifty-tracker-v1';
-                const urlsToCache = [
-                    './',
-                    './index.html',
-                    './style.css',
-                    './app.js'
-                ];
-
-                self.addEventListener('install', event => {
-                    event.waitUntil(
-                        caches.open(CACHE_NAME)
-                            .then(cache => cache.addAll(urlsToCache))
-                    );
-                });
-
-                self.addEventListener('fetch', event => {
-                    event.respondWith(
-                        caches.match(event.request)
-                            .then(response => {
-                                return response || fetch(event.request);
-                            }
-                        )
-                    );
-                });
-                `;
-
-                const blob = new Blob([swCode], { type: 'application/javascript' });
-                const swUrl = URL.createObjectURL(blob);
-                
-                await navigator.serviceWorker.register(swUrl);
+                await navigator.serviceWorker.register('./sw.js');
                 console.log('Service Worker registered successfully');
             } catch (error) {
-                console.log('Service Worker registration failed:', error);
+                console.error('Service Worker registration failed:', error);
             }
         }
     }
 
-    checkOnlineStatus() {
-        this.isOnline = navigator.onLine;
-        this.updateStatusIndicator();
-    }
-
-    handleOnlineStatus(online) {
-        this.isOnline = online;
-        this.updateStatusIndicator();
-        
-        if (online) {
-            this.hideOfflineBanner();
-            this.fetchNiftyData();
-            this.setupAutoRefresh();
-        } else {
-            this.showOfflineBanner();
-            this.clearAutoRefresh();
+    async fetchHistoricalData() {
+        try {
+            const endDate = Math.floor(Date.now() / 1000);
+            const startDate = endDate - (100 * 24 * 60 * 60); // 100 days ago
+            
+            const url = `${this.API_BASE}${this.SYMBOL}?period1=${startDate}&period2=${endDate}&interval=1d`;
+            const response = await fetch(url);
+            
+            if (!response.ok) throw new Error('Failed to fetch historical data');
+            
+            const data = await response.json();
+            this.processHistoricalData(data);
+            
+            // Cache historical data
+            this.cacheData('nifty_historical', this.historicalData);
+        } catch (error) {
+            console.error('Error fetching historical data:', error);
+            this.historicalData = this.FALLBACK_HISTORICAL;
         }
     }
 
-    updateStatusIndicator() {
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
+    processHistoricalData(data) {
+        try {
+            const result = data.chart.result[0];
+            const timestamps = result.timestamp;
+            const quotes = result.indicators.quote[0];
+            
+            this.historicalData = timestamps.map((timestamp, index) => ({
+                date: new Date(timestamp * 1000).toISOString().split('T')[0],
+                close: quotes.close[index],
+                high: quotes.high[index],
+                low: quotes.low[index],
+                open: quotes.open[index],
+                volume: quotes.volume[index]
+            })).filter(item => item.close !== null);
+            
+        } catch (error) {
+            console.error('Error processing historical data:', error);
+            this.historicalData = this.FALLBACK_HISTORICAL;
+        }
+    }
+
+    calculateEMAs() {
+        if (this.historicalData.length < 50) {
+            console.warn('Insufficient historical data for EMA calculation');
+            return;
+        }
+
+        const closePrices = this.historicalData.map(item => item.close);
         
-        if (this.isOnline) {
-            statusDot.className = 'status-dot online';
-            statusText.textContent = 'Live';
-        } else {
-            statusDot.className = 'status-dot offline';
-            statusText.textContent = 'Offline';
+        this.emaData.ema20 = this.calculateEMA(closePrices, this.THRESHOLDS.EMA_PERIOD_20);
+        this.emaData.ema50 = this.calculateEMA(closePrices, this.THRESHOLDS.EMA_PERIOD_50);
+        
+        // Cache EMA data
+        this.cacheData('nifty_ema', this.emaData);
+    }
+
+    calculateEMA(prices, period) {
+        if (prices.length < period) return [];
+        
+        const k = 2 / (period + 1);
+        const emaValues = [];
+        
+        // Start with SMA for the first value
+        let sma = 0;
+        for (let i = 0; i < period; i++) {
+            sma += prices[i];
+        }
+        sma = sma / period;
+        emaValues.push(sma);
+        
+        // Calculate EMA for remaining values
+        for (let i = period; i < prices.length; i++) {
+            const ema = (prices[i] * k) + (emaValues[emaValues.length - 1] * (1 - k));
+            emaValues.push(ema);
+        }
+        
+        return emaValues;
+    }
+
+    detectCrossovers() {
+        if (this.emaData.ema20.length < 2 || this.emaData.ema50.length < 2) {
+            return;
+        }
+        
+        const crossovers = [];
+        const startIndex = Math.max(this.THRESHOLDS.EMA_PERIOD_50 - this.THRESHOLDS.EMA_PERIOD_20, 1);
+        
+        for (let i = startIndex; i < this.emaData.ema20.length; i++) {
+            const current20 = this.emaData.ema20[i];
+            const current50 = this.emaData.ema50[i - startIndex + this.THRESHOLDS.EMA_PERIOD_20 - 1];
+            const prev20 = this.emaData.ema20[i - 1];
+            const prev50 = this.emaData.ema50[i - startIndex + this.THRESHOLDS.EMA_PERIOD_20 - 2];
+            
+            if (!current20 || !current50 || !prev20 || !prev50) continue;
+            
+            let crossoverType = null;
+            
+            // Bullish crossover: 20 EMA crosses above 50 EMA
+            if (prev20 <= prev50 && current20 > current50) {
+                crossoverType = 'BULLISH_CROSS';
+            }
+            // Bearish crossover: 20 EMA crosses below 50 EMA
+            else if (prev20 >= prev50 && current20 < current50) {
+                crossoverType = 'BEARISH_CROSS';
+            }
+            
+            if (crossoverType) {
+                crossovers.push({
+                    date: this.historicalData[i].date,
+                    type: crossoverType,
+                    price: this.historicalData[i].close,
+                    ema20: current20,
+                    ema50: current50
+                });
+            }
+        }
+        
+        this.emaData.crossovers = crossovers;
+    }
+
+    getCurrentEMATrend() {
+        if (this.emaData.ema20.length === 0 || this.emaData.ema50.length === 0) {
+            return {
+                trend: 'UNKNOWN',
+                ema20: null,
+                ema50: null,
+                lastCrossover: null,
+                daysSinceCross: null
+            };
+        }
+        
+        const current20 = this.emaData.ema20[this.emaData.ema20.length - 1];
+        const current50 = this.emaData.ema50[this.emaData.ema50.length - 1];
+        const trend = current20 > current50 ? 'BULLISH' : 'BEARISH';
+        
+        const lastCrossover = this.emaData.crossovers.length > 0 
+            ? this.emaData.crossovers[this.emaData.crossovers.length - 1]
+            : null;
+            
+        let daysSinceCross = null;
+        if (lastCrossover) {
+            const crossDate = new Date(lastCrossover.date);
+            const today = new Date();
+            daysSinceCross = Math.floor((today - crossDate) / (1000 * 60 * 60 * 24));
+        }
+        
+        return {
+            trend,
+            ema20: current20,
+            ema50: current50,
+            lastCrossover,
+            daysSinceCross
+        };
+    }
+
+    async fetchNiftyData() {
+        try {
+            const response = await fetch(`${this.API_BASE}${this.SYMBOL}`);
+            
+            if (!response.ok) throw new Error('Failed to fetch data');
+            
+            const data = await response.json();
+            this.processNiftyData(data);
+            this.cacheData('nifty_current', this.data);
+            
+        } catch (error) {
+            console.error('Error fetching Nifty data:', error);
+            this.useFallbackData();
+        }
+    }
+
+    processNiftyData(response) {
+        try {
+            const result = response.chart.result[0];
+            const meta = result.meta;
+            
+            this.data = {
+                current_price: meta.regularMarketPrice || meta.previousClose,
+                previous_close: meta.previousClose,
+                open: meta.regularMarketOpen || meta.previousClose,
+                high_52w: meta.fiftyTwoWeekHigh,
+                low_52w: meta.fiftyTwoWeekLow,
+                all_time_high: this.THRESHOLDS.ALL_TIME_HIGH,
+                // These would need separate API calls in production
+                pe_ratio: this.FALLBACK_DATA.pe_ratio,
+                rsi: this.FALLBACK_DATA.rsi,
+                dma_200: this.FALLBACK_DATA.dma_200,
+                last_updated: new Date().toISOString()
+            };
+            
+        } catch (error) {
+            console.error('Error processing Nifty data:', error);
+            this.useFallbackData();
+        }
+    }
+
+    useFallbackData() {
+        this.data = { ...this.FALLBACK_DATA };
+        this.data.last_updated = new Date().toISOString();
+    }
+
+    calculateInvestmentSignals() {
+        if (!this.data) return null;
+        
+        // Value Strategy (Original)
+        const correction = this.calculateCorrection();
+        const valueConditions = {
+            correction: correction <= -this.THRESHOLDS.CORRECTION_THRESHOLD,
+            rsi: this.data.rsi < this.THRESHOLDS.RSI_OVERSOLD,
+            pe: this.data.pe_ratio < this.THRESHOLDS.PE_ATTRACTIVE
+        };
+        
+        const valueSignal = Object.values(valueConditions).every(c => c) ? 'BUY' : 'WAIT';
+        
+        // Momentum Strategy (EMA)
+        const emaTrend = this.getCurrentEMATrend();
+        const momentumConditions = {
+            bullishTrend: emaTrend.trend === 'BULLISH',
+            recentCross: emaTrend.lastCrossover && 
+                        emaTrend.lastCrossover.type === 'BULLISH_CROSS' && 
+                        emaTrend.daysSinceCross < 30,
+            priceAboveEMAs: this.data.current_price > emaTrend.ema20 && 
+                           this.data.current_price > emaTrend.ema50
+        };
+        
+        const momentumSignal = momentumConditions.bullishTrend ? 'BUY' : 
+                              (emaTrend.trend === 'BEARISH' ? 'AVOID' : 'WAIT');
+        
+        // Combined Signal
+        let combinedSignal = 'WAIT';
+        if (valueSignal === 'BUY' && momentumSignal === 'BUY') {
+            combinedSignal = 'STRONG BUY';
+        } else if (valueSignal === 'BUY' || momentumSignal === 'BUY') {
+            combinedSignal = 'BUY';
+        } else if (momentumSignal === 'AVOID') {
+            combinedSignal = 'AVOID';
+        }
+        
+        return {
+            value: {
+                signal: valueSignal,
+                conditions: valueConditions,
+                description: this.getValueStrategyDescription(valueConditions)
+            },
+            momentum: {
+                signal: momentumSignal,
+                conditions: momentumConditions,
+                description: this.getMomentumStrategyDescription(emaTrend),
+                trend: emaTrend
+            },
+            combined: {
+                signal: combinedSignal,
+                description: this.getCombinedDescription(combinedSignal)
+            }
+        };
+    }
+
+    getValueStrategyDescription(conditions) {
+        const metCount = Object.values(conditions).filter(c => c).length;
+        if (metCount === 3) return 'All value conditions met - Strong buy opportunity';
+        if (metCount === 2) return 'Most value conditions met - Consider buying';
+        if (metCount === 1) return 'Few conditions met - Wait for better entry';
+        return 'No value conditions met - Avoid buying';
+    }
+
+    getMomentumStrategyDescription(trend) {
+        if (trend.trend === 'BULLISH') {
+            if (trend.daysSinceCross < 10) {
+                return 'Fresh bullish crossover - Strong momentum';
+            } else if (trend.daysSinceCross < 30) {
+                return 'Bullish trend continues - Good momentum';
+            } else {
+                return 'Extended bullish trend - Monitor for reversal';
+            }
+        } else if (trend.trend === 'BEARISH') {
+            return 'Bearish trend - Avoid new positions';
+        }
+        return 'Trend unclear - Wait for confirmation';
+    }
+
+    getCombinedDescription(signal) {
+        switch (signal) {
+            case 'STRONG BUY': return 'Both strategies bullish - Excellent opportunity';
+            case 'BUY': return 'One strategy bullish - Good opportunity';
+            case 'AVOID': return 'Bearish momentum - Avoid new positions';
+            default: return 'Mixed signals - Wait for clarity';
+        }
+    }
+
+    calculateCorrection() {
+        if (!this.data) return 0;
+        return ((this.data.current_price - this.data.all_time_high) / this.data.all_time_high) * 100;
+    }
+
+    calculateUpside() {
+        if (!this.data) return 0;
+        return ((this.data.all_time_high - this.data.current_price) / this.data.current_price) * 100;
+    }
+
+    updateUI() {
+        if (!this.data) return;
+        
+        this.updateMarketData();
+        this.updateTechnicalIndicators();
+        this.updateEMAAnalysis();
+        this.updateInvestmentSignals();
+        this.updateLastUpdated();
+    }
+
+    updateMarketData() {
+        const elements = {
+            currentPrice: document.getElementById('currentPrice'),
+            previousClose: document.getElementById('previousClose'),
+            dayOpen: document.getElementById('dayOpen'),
+            allTimeHigh: document.getElementById('allTimeHigh'),
+            week52High: document.getElementById('week52High'),
+            week52Low: document.getElementById('week52Low'),
+            correction: document.getElementById('correction'),
+            upside: document.getElementById('upside')
+        };
+        
+        const change = this.data.current_price - this.data.previous_close;
+        const changePercent = (change / this.data.previous_close) * 100;
+        
+        if (elements.currentPrice) {
+            elements.currentPrice.innerHTML = `
+                <div class="card-value ${change >= 0 ? 'positive' : 'negative'}">
+                    ₹${this.formatNumber(this.data.current_price)}
+                </div>
+                <div class="card-change ${change >= 0 ? 'positive' : 'negative'}">
+                    ${change >= 0 ? '↗' : '↘'} ₹${Math.abs(change).toFixed(2)} (${changePercent.toFixed(2)}%)
+                </div>
+            `;
+        }
+        
+        if (elements.previousClose) {
+            elements.previousClose.textContent = `₹${this.formatNumber(this.data.previous_close)}`;
+        }
+        
+        if (elements.dayOpen) {
+            elements.dayOpen.textContent = `₹${this.formatNumber(this.data.open)}`;
+        }
+        
+        if (elements.allTimeHigh) {
+            elements.allTimeHigh.textContent = `₹${this.formatNumber(this.data.all_time_high)}`;
+        }
+        
+        if (elements.week52High) {
+            elements.week52High.textContent = `₹${this.formatNumber(this.data.high_52w)}`;
+        }
+        
+        if (elements.week52Low) {
+            elements.week52Low.textContent = `₹${this.formatNumber(this.data.low_52w)}`;
+        }
+        
+        const correction = this.calculateCorrection();
+        if (elements.correction) {
+            elements.correction.innerHTML = `
+                <span class="${correction <= -10 ? 'positive' : 'negative'}">
+                    ${correction.toFixed(2)}%
+                </span>
+            `;
+        }
+        
+        const upside = this.calculateUpside();
+        if (elements.upside) {
+            elements.upside.innerHTML = `
+                <span class="positive">${upside.toFixed(2)}%</span>
+            `;
+        }
+    }
+
+    updateTechnicalIndicators() {
+        const elements = {
+            rsi: document.getElementById('rsiValue'),
+            dma200: document.getElementById('dma200'),
+            peRatio: document.getElementById('peRatio')
+        };
+        
+        if (elements.rsi) {
+            const rsiClass = this.data.rsi < 30 ? 'positive' : 
+                           (this.data.rsi > 70 ? 'negative' : 'neutral');
+            elements.rsi.innerHTML = `
+                <span class="${rsiClass}">${this.data.rsi.toFixed(2)}</span>
+            `;
+        }
+        
+        if (elements.dma200) {
+            const dmaClass = this.data.current_price > this.data.dma_200 ? 'positive' : 'negative';
+            elements.dma200.innerHTML = `
+                ₹${this.formatNumber(this.data.dma_200)}
+                <div class="card-meta ${dmaClass}">
+                    Price ${this.data.current_price > this.data.dma_200 ? 'above' : 'below'} 200 DMA
+                </div>
+            `;
+        }
+        
+        if (elements.peRatio) {
+            const peClass = this.data.pe_ratio < 21 ? 'positive' : 
+                           (this.data.pe_ratio > 25 ? 'negative' : 'neutral');
+            elements.peRatio.innerHTML = `
+                <span class="${peClass}">${this.data.pe_ratio.toFixed(2)}</span>
+            `;
+        }
+    }
+
+    updateEMAAnalysis() {
+        const trend = this.getCurrentEMATrend();
+        const emaSection = document.getElementById('emaAnalysis');
+        
+        if (!emaSection || !trend.ema20 || !trend.ema50) return;
+        
+        const trendClass = trend.trend === 'BULLISH' ? 'bullish' : 'bearish';
+        const trendIcon = trend.trend === 'BULLISH' ? '📈' : '📉';
+        const crossoverText = trend.lastCrossover 
+            ? `${trend.lastCrossover.type === 'BULLISH_CROSS' ? 'Bullish' : 'Bearish'} (${trend.daysSinceCross} days ago)`
+            : 'No recent crossover';
+        
+        emaSection.innerHTML = `
+            <div class="ema-values">
+                <div class="ema-value">
+                    <div class="ema-label">20 EMA</div>
+                    <div class="ema-price positive">₹${this.formatNumber(trend.ema20)}</div>
+                </div>
+                <div class="ema-value">
+                    <div class="ema-label">50 EMA</div>
+                    <div class="ema-price positive">₹${this.formatNumber(trend.ema50)}</div>
+                </div>
+            </div>
+            <div class="ema-trend ${trendClass}">
+                <div style="font-size: 1.2rem;">${trendIcon}</div>
+                <div>
+                    <div style="font-weight: 600; text-transform: uppercase;">
+                        ${trend.trend} TREND
+                    </div>
+                    <div style="font-size: 0.85rem; opacity: 0.8;">
+                        Last Crossover: ${crossoverText}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    updateInvestmentSignals() {
+        const signals = this.calculateInvestmentSignals();
+        if (!signals) return;
+        
+        const signalCard = document.getElementById('investmentSignal');
+        if (!signalCard) return;
+        
+        const signalClass = signals.combined.signal.toLowerCase().includes('buy') ? 'buy' : 
+                           (signals.combined.signal === 'AVOID' ? 'avoid' : 'wait');
+        
+        signalCard.className = `signal-card ${signalClass}`;
+        signalCard.innerHTML = `
+            <div class="signal-header">
+                <div class="signal-status ${signalClass}">${signals.combined.signal}</div>
+                <div class="signal-description">${signals.combined.description}</div>
+            </div>
+            <div class="signal-strategies">
+                <div class="strategy-card ${this.getStrategyClass(signals.value.signal)}">
+                    <div class="strategy-title">📊 Value Strategy</div>
+                    <div class="strategy-signal ${this.getStrategyClass(signals.value.signal)}">${signals.value.signal}</div>
+                    <div class="strategy-details">${signals.value.description}</div>
+                    <ul class="conditions">
+                        ${this.renderConditions(signals.value.conditions)}
+                    </ul>
+                </div>
+                <div class="strategy-card ${this.getStrategyClass(signals.momentum.signal)}">
+                    <div class="strategy-title">⚡ Momentum Strategy</div>
+                    <div class="strategy-signal ${this.getStrategyClass(signals.momentum.signal)}">${signals.momentum.signal}</div>
+                    <div class="strategy-details">${signals.momentum.description}</div>
+                    <div class="conditions">
+                        <div class="condition">
+                            <span class="condition-text">EMA Trend</span>
+                            <span class="condition-status ${signals.momentum.conditions.bullishTrend ? 'met' : 'not-met'}">
+                                ${signals.momentum.trend.trend}
+                            </span>
+                        </div>
+                        <div class="condition">
+                            <span class="condition-text">Recent Cross</span>
+                            <span class="condition-status ${signals.momentum.conditions.recentCross ? 'met' : 'not-met'}">
+                                ${signals.momentum.conditions.recentCross ? 'YES' : 'NO'}
+                            </span>
+                        </div>
+                        <div class="condition">
+                            <span class="condition-text">Price > EMAs</span>
+                            <span class="condition-status ${signals.momentum.conditions.priceAboveEMAs ? 'met' : 'not-met'}">
+                                ${signals.momentum.conditions.priceAboveEMAs ? 'YES' : 'NO'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    getStrategyClass(signal) {
+        if (signal.includes('BUY')) return 'bullish';
+        if (signal === 'AVOID') return 'bearish';
+        return 'neutral';
+    }
+
+    renderConditions(conditions) {
+        return Object.entries(conditions).map(([key, met]) => {
+            const labels = {
+                correction: '10%+ Correction',
+                rsi: 'RSI < 30',
+                pe: 'PE < 21'
+            };
+            
+            return `
+                <li class="condition">
+                    <span class="condition-text">${labels[key]}</span>
+                    <span class="condition-status ${met ? 'met' : 'not-met'}">
+                        ${met ? 'MET' : 'NOT MET'}
+                    </span>
+                </li>
+            `;
+        }).join('');
+    }
+
+    updateLastUpdated() {
+        const element = document.getElementById('lastUpdated');
+        if (element && this.data) {
+            const updateTime = new Date(this.data.last_updated);
+            element.textContent = `Last updated: ${updateTime.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })} IST`;
+        }
+    }
+
+    formatNumber(num) {
+        if (num >= 1000) {
+            return num.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        }
+        return num.toFixed(2);
+    }
+
+    async manualRefresh() {
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<span class="pulse">↻</span> Refreshing...';
+        }
+        
+        this.showLoading();
+        
+        await Promise.all([
+            this.fetchNiftyData(),
+            this.fetchHistoricalData()
+        ]);
+        
+        this.calculateEMAs();
+        this.detectCrossovers();
+        this.updateUI();
+        
+        this.hideLoading();
+        
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '↻ Refresh';
         }
     }
 
     isMarketHours() {
         const now = new Date();
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
+        const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+        const hours = istTime.getHours();
+        const minutes = istTime.getMinutes();
+        const currentMinutes = hours * 60 + minutes;
         
         const startMinutes = this.MARKET_HOURS.start.hour * 60 + this.MARKET_HOURS.start.minute;
         const endMinutes = this.MARKET_HOURS.end.hour * 60 + this.MARKET_HOURS.end.minute;
-        const currentMinutes = currentHour * 60 + currentMinute;
         
-        // Only on weekdays
-        const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+        // Check if it's a weekday (Monday = 1, Sunday = 0)
+        const dayOfWeek = istTime.getDay();
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
         
         return isWeekday && currentMinutes >= startMinutes && currentMinutes <= endMinutes;
     }
@@ -168,10 +725,16 @@ class NiftyTracker {
     setupAutoRefresh() {
         this.clearAutoRefresh();
         
-        if (this.isMarketHours() && this.isOnline) {
-            this.refreshInterval = setInterval(() => {
-                this.fetchNiftyData();
-            }, 30000); // 30 seconds
+        if (this.isMarketHours()) {
+            this.refreshInterval = setInterval(async () => {
+                await this.fetchNiftyData();
+                this.updateUI();
+            }, 30000); // 30 seconds during market hours
+        } else {
+            this.refreshInterval = setInterval(async () => {
+                await this.fetchNiftyData();
+                this.updateUI();
+            }, 300000); // 5 minutes after hours
         }
     }
 
@@ -182,121 +745,60 @@ class NiftyTracker {
         }
     }
 
-    async fetchNiftyData() {
-        try {
-            const url = `${this.API_BASE}${this.SYMBOL}?interval=1d&range=1y`;
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            await this.processYahooData(data);
-            
-        } catch (error) {
-            console.error('Error fetching data:', error);
-            this.useFallbackData();
+    handleOnlineStatus(isOnline) {
+        this.isOnline = isOnline;
+        const statusElement = document.getElementById('connectionStatus');
+        
+        if (statusElement) {
+            statusElement.className = `status-indicator ${isOnline ? 'status-online' : 'status-offline'}`;
+            statusElement.innerHTML = `
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: ${isOnline ? 'var(--green)' : 'var(--red)'}"></span>
+                ${isOnline ? 'Online' : 'Offline'}
+            `;
+        }
+        
+        if (isOnline) {
+            this.setupAutoRefresh();
+        } else {
+            this.clearAutoRefresh();
         }
     }
 
-    async processYahooData(yahooData) {
+    checkOnlineStatus() {
+        this.handleOnlineStatus(navigator.onLine);
+    }
+
+    showLoading() {
+        document.querySelectorAll('.card').forEach(card => {
+            card.classList.add('loading');
+        });
+        
+        const loadingElement = document.getElementById('loadingIndicator');
+        if (loadingElement) {
+            loadingElement.textContent = 'Updating data...';
+            loadingElement.classList.remove('hidden');
+        }
+    }
+
+    hideLoading() {
+        document.querySelectorAll('.card').forEach(card => {
+            card.classList.remove('loading');
+        });
+        
+        const loadingElement = document.getElementById('loadingIndicator');
+        if (loadingElement) {
+            loadingElement.classList.add('hidden');
+        }
+    }
+
+    cacheData(key, data) {
         try {
-            const result = yahooData.chart.result[0];
-            const meta = result.meta;
-            const quote = result.indicators.quote[0];
-            
-            // Get latest values
-            const prices = quote.close.filter(p => p !== null);
-            const highs = quote.high.filter(h => h !== null);
-            const lows = quote.low.filter(l => l !== null);
-            
-            const currentPrice = meta.regularMarketPrice || prices[prices.length - 1];
-            const previousClose = meta.previousClose || prices[prices.length - 2];
-            const open = meta.regularMarketOpen || quote.open[quote.open.length - 1];
-            
-            // Calculate 52-week high/low
-            const high52w = Math.max(...highs);
-            const low52w = Math.min(...lows);
-            
-            // Calculate 200 DMA
-            const dma200 = this.calculate200DMA(prices);
-            
-            // Calculate RSI
-            const rsi = this.calculateRSI(prices);
-            
-            this.data = {
-                current_price: currentPrice,
-                previous_close: previousClose,
-                open: open,
-                high_52w: high52w,
-                low_52w: low52w,
-                all_time_high: this.THRESHOLDS.ALL_TIME_HIGH,
-                pe_ratio: this.FALLBACK_DATA.pe_ratio, // PE not available from Yahoo, use fallback
-                rsi: rsi,
-                dma_200: dma200,
-                last_updated: new Date().toISOString()
+            const cacheData = {
+                data: data,
+                timestamp: Date.now(),
+                version: '2.0'
             };
-            
-            this.cacheData();
-            this.updateUI();
-            
-        } catch (error) {
-            console.error('Error processing Yahoo data:', error);
-            this.useFallbackData();
-        }
-    }
-
-    calculate200DMA(prices) {
-        if (prices.length < 200) {
-            return this.FALLBACK_DATA.dma_200;
-        }
-        
-        const last200 = prices.slice(-200);
-        const sum = last200.reduce((acc, price) => acc + price, 0);
-        return sum / last200.length;
-    }
-
-    calculateRSI(prices, period = 14) {
-        if (prices.length < period + 1) {
-            return this.FALLBACK_DATA.rsi;
-        }
-        
-        const changes = [];
-        for (let i = 1; i < prices.length; i++) {
-            changes.push(prices[i] - prices[i - 1]);
-        }
-        
-        const recentChanges = changes.slice(-period);
-        const gains = recentChanges.filter(change => change > 0);
-        const losses = recentChanges.filter(change => change < 0).map(loss => Math.abs(loss));
-        
-        const avgGain = gains.length ? gains.reduce((acc, gain) => acc + gain, 0) / period : 0;
-        const avgLoss = losses.length ? losses.reduce((acc, loss) => acc + loss, 0) / period : 0;
-        
-        if (avgLoss === 0) return 100;
-        
-        const rs = avgGain / avgLoss;
-        return 100 - (100 / (1 + rs));
-    }
-
-    useFallbackData() {
-        this.data = {
-            ...this.FALLBACK_DATA,
-            last_updated: new Date().toISOString()
-        };
-        this.updateUI();
-    }
-
-    cacheData() {
-        try {
-            localStorage.setItem('nifty-data', JSON.stringify(this.data));
+            localStorage.setItem(key, JSON.stringify(cacheData));
         } catch (error) {
             console.error('Error caching data:', error);
         }
@@ -304,166 +806,40 @@ class NiftyTracker {
 
     loadCachedData() {
         try {
-            const cached = localStorage.getItem('nifty-data');
-            if (cached) {
-                this.data = JSON.parse(cached);
-                this.updateUI();
+            const currentData = localStorage.getItem('nifty_current');
+            const historicalData = localStorage.getItem('nifty_historical');
+            const emaData = localStorage.getItem('nifty_ema');
+            
+            if (currentData) {
+                const cached = JSON.parse(currentData);
+                if (cached.version === '2.0' && Date.now() - cached.timestamp < 600000) { // 10 min
+                    this.data = cached.data;
+                }
             }
+            
+            if (historicalData) {
+                const cached = JSON.parse(historicalData);
+                if (cached.version === '2.0' && Date.now() - cached.timestamp < 3600000) { // 1 hour
+                    this.historicalData = cached.data;
+                }
+            }
+            
+            if (emaData) {
+                const cached = JSON.parse(emaData);
+                if (cached.version === '2.0' && Date.now() - cached.timestamp < 3600000) { // 1 hour
+                    this.emaData = cached.data;
+                }
+            }
+            
         } catch (error) {
             console.error('Error loading cached data:', error);
         }
     }
-
-    updateUI() {
-        if (!this.data) return;
-
-        // Update current price
-        document.getElementById('currentPrice').textContent = this.formatNumber(this.data.current_price);
-        document.getElementById('previousClose').textContent = this.formatNumber(this.data.previous_close);
-        document.getElementById('openPrice').textContent = this.formatNumber(this.data.open);
-
-        // Update price change
-        const change = this.data.current_price - this.data.previous_close;
-        const changePercent = (change / this.data.previous_close) * 100;
-        const priceChangeEl = document.getElementById('priceChange');
-        priceChangeEl.textContent = `${change >= 0 ? '+' : ''}${this.formatNumber(change)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
-        priceChangeEl.className = `price-change ${change >= 0 ? 'positive' : 'negative'}`;
-
-        // Update price levels
-        document.getElementById('allTimeHigh').textContent = this.formatNumber(this.data.all_time_high);
-        document.getElementById('high52w').textContent = this.formatNumber(this.data.high_52w);
-        document.getElementById('low52w').textContent = this.formatNumber(this.data.low_52w);
-
-        // Calculate and update correction/upside
-        const correctionPercent = ((this.data.current_price - this.data.all_time_high) / this.data.all_time_high) * 100;
-        const upsidePercent = ((this.data.all_time_high - this.data.current_price) / this.data.current_price) * 100;
-        
-        const correctionEl = document.getElementById('correctionPercent');
-        correctionEl.textContent = `${correctionPercent.toFixed(2)}%`;
-        correctionEl.className = `value ${correctionPercent < -10 ? 'positive' : 'negative'}`;
-        
-        const upsideEl = document.getElementById('upsidePercent');
-        upsideEl.textContent = `${upsidePercent.toFixed(2)}%`;
-        upsideEl.className = `value positive`;
-
-        // Update technical indicators
-        const rsiEl = document.getElementById('rsiValue');
-        rsiEl.textContent = this.data.rsi.toFixed(2);
-        rsiEl.className = `value ${this.data.rsi < this.THRESHOLDS.RSI_OVERSOLD ? 'positive' : 
-                           this.data.rsi > this.THRESHOLDS.RSI_OVERBOUGHT ? 'negative' : 'neutral'}`;
-
-        document.getElementById('dma200').textContent = this.formatNumber(this.data.dma_200);
-        
-        const dmaPositionEl = document.getElementById('dmaPosition');
-        const aboveDMA = this.data.current_price > this.data.dma_200;
-        dmaPositionEl.textContent = aboveDMA ? 'Above' : 'Below';
-        dmaPositionEl.className = `value ${aboveDMA ? 'positive' : 'negative'}`;
-
-        // Update PE ratio
-        const peEl = document.getElementById('peRatio');
-        peEl.textContent = this.data.pe_ratio.toFixed(2);
-        peEl.className = `value ${this.data.pe_ratio < this.THRESHOLDS.PE_ATTRACTIVE ? 'attractive' : 
-                          this.data.pe_ratio > this.THRESHOLDS.PE_EXPENSIVE ? 'expensive' : 'neutral'}`;
-
-        // Update investment signal
-        this.updateInvestmentSignal(correctionPercent);
-
-        // Update last updated
-        const lastUpdated = new Date(this.data.last_updated);
-        document.getElementById('lastUpdated').textContent = `Last updated: ${lastUpdated.toLocaleTimeString()}`;
-    }
-
-    updateInvestmentSignal(correctionPercent) {
-        const conditions = {
-            correction: Math.abs(correctionPercent) >= this.THRESHOLDS.CORRECTION_THRESHOLD,
-            rsi: this.data.rsi < this.THRESHOLDS.RSI_OVERSOLD,
-            pe: this.data.pe_ratio < this.THRESHOLDS.PE_ATTRACTIVE
-        };
-
-        // Update individual conditions
-        this.updateCondition('correctionCondition', conditions.correction, 
-            `${Math.abs(correctionPercent).toFixed(1)}% correction`);
-        this.updateCondition('rsiCondition', conditions.rsi, 
-            `RSI: ${this.data.rsi.toFixed(1)}`);
-        this.updateCondition('peCondition', conditions.pe, 
-            `PE: ${this.data.pe_ratio.toFixed(1)}`);
-
-        // Update overall signal
-        const allConditionsMet = conditions.correction && conditions.rsi && conditions.pe;
-        const signalBadge = document.getElementById('signalBadge');
-        
-        if (allConditionsMet) {
-            signalBadge.textContent = 'BUY SIGNAL';
-            signalBadge.className = 'signal-badge buy';
-        } else {
-            signalBadge.textContent = 'WAIT';
-            signalBadge.className = 'signal-badge wait';
-        }
-    }
-
-    updateCondition(elementId, met, details) {
-        const conditionEl = document.getElementById(elementId);
-        const statusEl = conditionEl.querySelector('.condition-status');
-        
-        statusEl.textContent = met ? '✓ Met' : '✗ Not Met';
-        statusEl.className = `condition-status ${met ? 'met' : 'not-met'}`;
-        
-        // Update condition text with details
-        const textEl = conditionEl.querySelector('.condition-text');
-        textEl.textContent = textEl.textContent.split(' (')[0] + ` (${details})`;
-    }
-
-    formatNumber(num) {
-        return new Intl.NumberFormat('en-IN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(num);
-    }
-
-    async manualRefresh() {
-        const refreshBtn = document.getElementById('refreshBtn');
-        refreshBtn.classList.add('spinning');
-        
-        await this.fetchNiftyData();
-        
-        setTimeout(() => {
-            refreshBtn.classList.remove('spinning');
-        }, 500);
-    }
-
-    showLoading() {
-        document.getElementById('loadingOverlay').classList.add('show');
-    }
-
-    hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('show');
-    }
-
-    showOfflineBanner() {
-        document.getElementById('offlineBanner').classList.add('show');
-    }
-
-    hideOfflineBanner() {
-        document.getElementById('offlineBanner').classList.remove('show');
-    }
 }
 
-// Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new NiftyTracker();
-});
-
-// Handle app install prompt
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    
-    // Show install button or notification
-    console.log('PWA install prompt available');
-});
-
-window.addEventListener('appinstalled', (evt) => {
-    console.log('PWA was installed');
-});
+// Initialize the enhanced tracker when DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => new NiftyEMATracker());
+} else {
+    new NiftyEMATracker();
+}
